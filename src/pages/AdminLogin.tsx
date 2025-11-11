@@ -6,21 +6,19 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import { supabase } from "@/integrations/supabase/client";
 
 const AdminLogin = () => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!username || !password) {
+    if (!email || !password) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -31,12 +29,13 @@ const AdminLogin = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/admin_login`, {
-        username,
-        password,
+      const { data, error } = await supabase.functions.invoke('admin-login', {
+        body: { email, password },
       });
 
-      localStorage.setItem("adminToken", response.data.token);
+      if (error) throw error;
+
+      localStorage.setItem("adminToken", data.token);
       toast({
         title: "✅ Login Successful",
         description: "Welcome to admin dashboard",
@@ -45,7 +44,7 @@ const AdminLogin = () => {
     } catch (error: any) {
       toast({
         title: "❌ Login Failed",
-        description: error.response?.data?.error || "Invalid credentials",
+        description: error.message || "Invalid credentials",
         variant: "destructive",
       });
     } finally {
@@ -77,13 +76,13 @@ const AdminLogin = () => {
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter email"
                   required
                 />
               </div>

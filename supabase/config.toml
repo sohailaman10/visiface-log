@@ -1,1 +1,19 @@
 project_id = "mhoisovjkvvwvtbyougn"
+
+[functions.register-user]
+verify_jwt = false
+
+[functions.mark-attendance]
+verify_jwt = false
+
+[functions.admin-login]
+verify_jwt = false
+
+[functions.get-attendance]
+verify_jwt = false
+
+[functions.dashboard-stats]
+verify_jwt = false
+
+[functions.export-csv]
+verify_jwt = false

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Camera, Play, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
-import axios from "axios";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -22,8 +22,6 @@ const MarkAttendance = () => {
   const webcamRef = useRef<Webcam>(null);
   const { toast } = useToast();
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-
   const scanFace = useCallback(async () => {
     if (!webcamRef.current) return;
 
@@ -39,18 +37,20 @@ const MarkAttendance = () => {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_BASE_URL}/mark_attendance`, {
-        image: imageSrc,
+      const { data, error } = await supabase.functions.invoke('mark-attendance', {
+        body: { image: imageSrc },
       });
 
-      setSuccessData(response.data);
+      if (error) throw error;
+
+      setSuccessData(data);
       setShowDialog(true);
       toast({
         title: "✅ Success",
-        description: `Attendance marked for ${response.data.name}`,
+        description: `Attendance marked for ${data.name}`,
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || "Face not recognized";
+      const errorMessage = error.message || "Face not recognized";
       toast({
         title: "Recognition Failed",
         description: errorMessage,
@@ -59,7 +59,7 @@ const MarkAttendance = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast, API_BASE_URL]);
+  }, [toast]);
 
   return (
     <div className="min-h-screen bg-background py-8">

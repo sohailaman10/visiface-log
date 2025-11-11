@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Camera, StopCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
+import { supabase } from "@/integrations/supabase/client";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -20,8 +20,6 @@ const Register = () => {
   const webcamRef = useRef<Webcam>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
-
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
   const captureImage = useCallback(() => {
     if (webcamRef.current && capturedImages.length < 20) {
@@ -57,13 +55,17 @@ const Register = () => {
 
     setLoading(true);
     try {
-      await axios.post(`${API_BASE_URL}/register_user`, {
-        name,
-        roll_number: rollNumber,
-        class: studentClass,
-        section,
-        images: capturedImages,
+      const { data, error } = await supabase.functions.invoke('register-user', {
+        body: {
+          name,
+          roll_number: rollNumber,
+          class: studentClass,
+          section,
+          images: capturedImages,
+        },
       });
+
+      if (error) throw error;
 
       toast({
         title: "✅ Registered Successfully",
@@ -74,7 +76,7 @@ const Register = () => {
     } catch (error: any) {
       toast({
         title: "Registration Failed",
-        description: error.response?.data?.error || "Failed to register. Please try again.",
+        description: error.message || "Failed to register. Please try again.",
         variant: "destructive",
       });
     } finally {

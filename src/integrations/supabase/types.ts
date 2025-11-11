@@ -14,7 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      admins: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          password_hash: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          password_hash: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          password_hash?: string
+        }
+        Relationships: []
+      }
+      attendance: {
+        Row: {
+          class: string
+          confidence: number
+          id: string
+          name: string
+          roll_number: string
+          section: string
+          source: string | null
+          timestamp: string | null
+          user_id: string | null
+        }
+        Insert: {
+          class: string
+          confidence: number
+          id?: string
+          name: string
+          roll_number: string
+          section: string
+          source?: string | null
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          class?: string
+          confidence?: number
+          id?: string
+          name?: string
+          roll_number?: string
+          section?: string
+          source?: string | null
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          class: string
+          created_at: string | null
+          id: string
+          name: string
+          reference_images: Json
+          roll_number: string
+          section: string
+        }
+        Insert: {
+          class: string
+          created_at?: string | null
+          id?: string
+          name: string
+          reference_images: Json
+          roll_number: string
+          section: string
+        }
+        Update: {
+          class?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          reference_images?: Json
+          roll_number?: string
+          section?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

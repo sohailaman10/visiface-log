@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { LogOut, Users, CheckCircle, XCircle, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 
 interface AttendanceRecord {
-  id: number;
+  id: string;
   name: string;
   roll_number: string;
   class: string;
@@ -44,8 +44,6 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
     if (!token) {
@@ -58,24 +56,26 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     const token = localStorage.getItem("adminToken");
     try {
-      const [statsRes, attendanceRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/dashboard_stats`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_BASE_URL}/get_attendance`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      const { data: statsData, error: statsError } = await supabase.functions.invoke('dashboard-stats', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      setStats(statsRes.data);
-      setAttendance(attendanceRes.data);
+      const { data: attendanceData, error: attendanceError } = await supabase.functions.invoke('get-attendance', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (statsError) throw statsError;
+      if (attendanceError) throw attendanceError;
+
+      setStats(statsData);
+      setAttendance(attendanceData);
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.response?.data?.error || "Failed to fetch data",
+        description: error.message || "Failed to fetch data",
         variant: "destructive",
       });
-      if (error.response?.status === 401) {
+      if (error.message?.includes("Unauthorized")) {
         localStorage.removeItem("adminToken");
         navigate("/admin/login");
       }
@@ -96,12 +96,15 @@ const AdminDashboard = () => {
   const handleExportCSV = async () => {
     const token = localStorage.getItem("adminToken");
     try {
-      const response = await axios.get(`${API_BASE_URL}/export_csv`, {
+      const { data, error } = await supabase.functions.invoke('export-csv', {
         headers: { Authorization: `Bearer ${token}` },
-        responseType: "blob",
       });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      if (error) throw error;
+
+      // Create blob and download
+      const blob = new Blob([data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", `attendance_${new Date().toISOString().split("T")[0]}.csv`);

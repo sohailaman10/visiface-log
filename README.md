@@ -1,6 +1,85 @@
-# Welcome to your Lovable project
+# Face Recognition Attendance System
 
-## Project info
+## 🎓 Automated Attendance Tracking with AI
+
+An intelligent attendance management system that uses advanced face recognition technology powered by Lovable AI.
+
+## 🚀 Quick Start
+
+### Admin Login
+- **Email**: sohailaman@gmail.com  
+- **Password**: admin123
+
+### How to Use
+
+1. **Register Students** (`/register`)
+   - Enter student details
+   - Capture 20 face images
+   - System stores face data securely
+
+2. **Mark Attendance** (`/mark`)
+   - Student looks at camera
+   - AI recognizes face automatically
+   - Attendance recorded with timestamp
+
+3. **Admin Dashboard** (`/admin/dashboard`)
+   - View attendance statistics
+   - Search and filter records
+   - Export data to CSV
+
+## 📖 Documentation
+
+See [SYSTEM_GUIDE.md](./SYSTEM_GUIDE.md) for complete system documentation including:
+- Technical architecture
+- Database schema
+- Security features
+- Troubleshooting guide
+
+## 🏗️ Built With
+
+- **Frontend**: React + TypeScript + Tailwind CSS + Vite
+- **Backend**: Lovable Cloud (Supabase Edge Functions)
+- **AI**: Lovable AI (Google Gemini 2.5 Flash)
+- **Database**: PostgreSQL with Row Level Security
+- **UI Components**: shadcn/ui
+
+## 🔐 Security
+
+- JWT-based admin authentication
+- Row Level Security on all database tables
+- Encrypted face data storage
+- CORS-protected API endpoints
+
+## 📊 Features
+
+✅ AI-powered face recognition  
+✅ Real-time attendance tracking  
+✅ Admin dashboard with analytics  
+✅ Search and filter capabilities  
+✅ CSV export functionality  
+✅ Responsive mobile design  
+✅ Toast notifications  
+✅ Secure authentication  
+
+## 🎯 System Flow
+
+```
+Registration → Capture 20 Images → Store in Database
+Attendance → Scan Face → AI Match → Record Attendance  
+Admin → Login → View Dashboard → Export Reports
+```
+
+## 📱 Pages
+
+- `/` - Home page with navigation
+- `/register` - Student face registration
+- `/mark` - Attendance marking scanner
+- `/admin/login` - Admin authentication
+- `/admin/dashboard` - Attendance management
+
+---
+
+## Project Info
 
 **URL**: https://lovable.dev/projects/73b22e53-f1aa-48bd-aada-6fa7fb9a9a19
 
