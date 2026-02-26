@@ -1,81 +1,93 @@
-import { useState, useRef, useCallback } from "react";
-import Webcam from "react-webcam";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Camera, Play, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+/**
+ * Mark Attendance Page
+ * Real-time face scanning with auto-recognition.
+ * Extracts 128D embedding client-side, sends to backend for matching.
+ * NO AI API calls — pure mathematical cosine similarity.
+ */
+import { useState, useCallback, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import FaceScanner from '@/components/FaceScanner';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 
-const MarkAttendance = () => {
-  const [isScanning, setIsScanning] = useState(false);
+interface AttendanceResult {
+  name: string;
+  roll_number: string;
+  class: string;
+  section: string;
+  confidence: number;
+}
+
+export default function MarkAttendance() {
+  const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [successData, setSuccessData] = useState<any>(null);
+  const [successData, setSuccessData] = useState<AttendanceResult | null>(null);
   const [showDialog, setShowDialog] = useState(false);
-  const webcamRef = useRef<Webcam>(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const cooldownRef = useRef(false);
   const { toast } = useToast();
 
-  const scanFace = useCallback(async () => {
-    if (!webcamRef.current) return;
+  const handleEmbeddingCaptured = useCallback(
+    async (embedding: number[]) => {
+      // Prevent rapid-fire requests
+      if (loading || cooldownRef.current) return;
+      cooldownRef.current = true;
+      setLoading(true);
+      setStatusMessage('Matching face...');
 
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) {
-      toast({
-        title: "Error",
-        description: "Failed to capture image",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('mark-attendance', {
-        body: { image: imageSrc },
-      });
-
-      if (error) throw error;
-
-      setSuccessData(data);
-      setShowDialog(true);
-      toast({
-        title: "✅ Success",
-        description: `Attendance marked for ${data.name}`,
-      });
-    } catch (error: any) {
-      // Parse edge function error responses
-      let errorMessage = "Face not recognized";
-      let variant: "destructive" | "default" = "destructive";
       try {
-        if (error?.context?.body) {
-          const body = typeof error.context.body === 'string' ? JSON.parse(error.context.body) : error.context.body;
-          errorMessage = body?.error || errorMessage;
-        } else if (error?.message) {
-          errorMessage = error.message;
+        // Send ONLY the embedding vector to backend — no images
+        const { data, error } = await supabase.functions.invoke('mark-attendance', {
+          body: { embedding },
+        });
+
+        if (error) {
+          // Parse edge function error
+          let msg = 'Face not recognized';
+          try {
+            const body = typeof error.context?.body === 'string'
+              ? JSON.parse(error.context.body)
+              : error.context?.body;
+            msg = body?.error || msg;
+          } catch { /* use default */ }
+
+          if (msg.includes('already marked')) {
+            setStatusMessage('Already marked recently');
+            toast({ title: '⚠️ Already Marked', description: msg });
+          } else {
+            setStatusMessage('Not recognized');
+            toast({ title: 'Not Recognized', description: msg, variant: 'destructive' });
+          }
+        } else if (data?.success) {
+          setSuccessData(data);
+          setShowDialog(true);
+          setStatusMessage(`Recognized: ${data.name}`);
+          toast({ title: '✅ Attendance Marked', description: `${data.name} — ${data.confidence}% confidence` });
         }
-      } catch { /* use default */ }
-
-      // Handle duplicate attendance (409)
-      if (errorMessage.includes('already marked')) {
-        variant = "default";
+      } catch (err: any) {
+        setStatusMessage('Error occurred');
+        toast({ title: 'Error', description: err.message || 'Unknown error', variant: 'destructive' });
+      } finally {
+        setLoading(false);
+        // 3-second cooldown before next scan
+        setTimeout(() => {
+          cooldownRef.current = false;
+          setStatusMessage('');
+        }, 3000);
       }
-
-      toast({
-        title: variant === "destructive" ? "Recognition Failed" : "⚠️ Already Marked",
-        description: errorMessage,
-        variant,
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
+    },
+    [loading, toast]
+  );
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -95,46 +107,52 @@ const MarkAttendance = () => {
 
         <Card className="max-w-2xl mx-auto">
           <CardHeader>
-            <CardTitle>Face Scanner</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Face Scanner</span>
+              {loading && (
+                <span className="text-sm font-normal text-muted-foreground animate-pulse">
+                  Processing...
+                </span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
-              {isScanning ? (
-                <Webcam
-                  ref={webcamRef}
-                  audio={false}
-                  screenshotFormat="image/jpeg"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground">Click "Start Scanner" to begin</p>
+            {!scanning ? (
+              <div className="space-y-4">
+                <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+                  <div className="text-center space-y-2">
+                    <p className="text-muted-foreground">Click below to start scanning</p>
+                    <p className="text-xs text-muted-foreground">
+                      Face detection runs in your browser — no images are uploaded
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
-
-            <div className="flex gap-4">
-              <Button
-                onClick={() => setIsScanning(!isScanning)}
-                variant={isScanning ? "outline" : "default"}
-                className="flex-1"
-              >
-                {isScanning ? "Stop Scanner" : (
-                  <>
-                    <Play className="mr-2 h-4 w-4" />
-                    Start Scanner
-                  </>
+                <Button onClick={() => setScanning(true)} className="w-full" size="lg">
+                  Start Scanner
+                </Button>
+              </div>
+            ) : (
+              <>
+                <FaceScanner
+                  onEmbeddingCaptured={handleEmbeddingCaptured}
+                  autoCapture={true}
+                  enabled={scanning}
+                  captureDelay={3000}
+                />
+                {statusMessage && (
+                  <div className="text-center text-sm font-medium text-muted-foreground">
+                    {statusMessage}
+                  </div>
                 )}
-              </Button>
-              <Button
-                onClick={scanFace}
-                disabled={!isScanning || loading}
-                className="flex-1"
-              >
-                <Camera className="mr-2 h-4 w-4" />
-                {loading ? "Scanning..." : "Scan Face"}
-              </Button>
-            </div>
+                <Button
+                  onClick={() => setScanning(false)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Stop Scanner
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -142,7 +160,7 @@ const MarkAttendance = () => {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-success">✅ Attendance Marked Successfully</DialogTitle>
+            <DialogTitle className="text-green-600">✅ Attendance Marked Successfully</DialogTitle>
             <DialogDescription>
               <div className="mt-4 space-y-2">
                 <p><strong>Name:</strong> {successData?.name}</p>
@@ -157,6 +175,4 @@ const MarkAttendance = () => {
       </Dialog>
     </div>
   );
-};
-
-export default MarkAttendance;
+}

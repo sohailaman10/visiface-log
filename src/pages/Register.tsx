@@ -1,90 +1,100 @@
-import { useState, useRef, useCallback } from "react";
-import Webcam from "react-webcam";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Camera, StopCircle, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Progress } from "@/components/ui/progress";
+/**
+ * Registration Page
+ * Auto-captures 3 face embeddings client-side using face-api.js.
+ * Sends ONLY embeddings (not images) to the backend.
+ */
+import { useState, useCallback } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { Progress } from '@/components/ui/progress';
+import FaceScanner from '@/components/FaceScanner';
 
-const REQUIRED_IMAGES = 3;
+const REQUIRED_EMBEDDINGS = 3;
 
-const Register = () => {
-  const [name, setName] = useState("");
-  const [rollNumber, setRollNumber] = useState("");
-  const [studentClass, setStudentClass] = useState("");
-  const [section, setSection] = useState("");
-  const [capturedImages, setCapturedImages] = useState<string[]>([]);
-  const [isCapturing, setIsCapturing] = useState(false);
+export default function Register() {
+  const [name, setName] = useState('');
+  const [rollNumber, setRollNumber] = useState('');
+  const [studentClass, setStudentClass] = useState('');
+  const [section, setSection] = useState('');
+  const [embeddings, setEmbeddings] = useState<number[][]>([]);
+  const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [registrationProgress, setRegistrationProgress] = useState(0);
-  const webcamRef = useRef<Webcam>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const captureImage = useCallback(() => {
-    if (webcamRef.current && capturedImages.length < REQUIRED_IMAGES) {
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (imageSrc) {
-        setCapturedImages((prev) => [...prev, imageSrc]);
+  const captureCount = embeddings.length;
+  const allCaptured = captureCount >= REQUIRED_EMBEDDINGS;
+
+  // Called by FaceScanner when a valid embedding is extracted
+  const handleEmbeddingCaptured = useCallback(
+    (embedding: number[]) => {
+      if (embeddings.length >= REQUIRED_EMBEDDINGS) return;
+
+      setEmbeddings(prev => {
+        if (prev.length >= REQUIRED_EMBEDDINGS) return prev;
+        const next = [...prev, embedding];
         toast({
-          title: "Image Captured",
-          description: `Captured ${capturedImages.length + 1}/${REQUIRED_IMAGES} images`,
+          title: `Face ${next.length}/${REQUIRED_EMBEDDINGS} captured`,
+          description: `${REQUIRED_EMBEDDINGS - next.length} more needed`,
         });
-      }
-    }
-  }, [capturedImages.length, toast]);
+        if (next.length >= REQUIRED_EMBEDDINGS) {
+          setScanning(false); // Stop scanner
+        }
+        return next;
+      });
+    },
+    [embeddings.length, toast]
+  );
 
   const handleRegister = async () => {
     if (!name || !rollNumber || !studentClass || !section) {
-      toast({ title: "Error", description: "Please fill all fields", variant: "destructive" });
+      toast({ title: 'Error', description: 'Please fill all fields', variant: 'destructive' });
       return;
     }
-
-    if (capturedImages.length < REQUIRED_IMAGES) {
-      toast({ title: "Error", description: `Please capture ${REQUIRED_IMAGES} images for registration`, variant: "destructive" });
+    if (!allCaptured) {
+      toast({ title: 'Error', description: `Capture ${REQUIRED_EMBEDDINGS} face samples first`, variant: 'destructive' });
       return;
     }
 
     setLoading(true);
-    setRegistrationProgress(10);
-
     try {
-      setRegistrationProgress(30);
-      toast({ title: "Processing", description: "Generating face embeddings... This may take a moment." });
-
       const { data, error } = await supabase.functions.invoke('register-user', {
         body: {
           name,
           roll_number: rollNumber,
           class: studentClass,
           section,
-          images: capturedImages,
+          embeddings, // Send ONLY embeddings, not images
         },
       });
 
       if (error) throw error;
 
-      setRegistrationProgress(100);
       toast({
-        title: "✅ Registered Successfully",
-        description: `${data.embeddingsCount} face embeddings generated and stored.`,
+        title: '✅ Registered Successfully',
+        description: `${name} registered with ${REQUIRED_EMBEDDINGS} face embeddings.`,
       });
-
-      setTimeout(() => navigate("/"), 2000);
+      setTimeout(() => navigate('/'), 2000);
     } catch (error: any) {
       toast({
-        title: "Registration Failed",
-        description: error.message || "Failed to register. Please try again.",
-        variant: "destructive",
+        title: 'Registration Failed',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
-      setRegistrationProgress(0);
     }
+  };
+
+  const resetCaptures = () => {
+    setEmbeddings([]);
+    setScanning(true);
   };
 
   return (
@@ -104,6 +114,7 @@ const Register = () => {
         </h1>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+          {/* User Info Form */}
           <Card>
             <CardHeader>
               <CardTitle>User Information</CardTitle>
@@ -111,98 +122,92 @@ const Register = () => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" />
+                <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" />
               </div>
               <div>
                 <Label htmlFor="rollNumber">Roll Number</Label>
-                <Input id="rollNumber" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} placeholder="Enter roll number" />
+                <Input id="rollNumber" value={rollNumber} onChange={e => setRollNumber(e.target.value)} placeholder="Enter roll number" />
               </div>
               <div>
                 <Label htmlFor="class">Class</Label>
-                <Input id="class" value={studentClass} onChange={(e) => setStudentClass(e.target.value)} placeholder="Enter class" />
+                <Input id="class" value={studentClass} onChange={e => setStudentClass(e.target.value)} placeholder="Enter class" />
               </div>
               <div>
                 <Label htmlFor="section">Section</Label>
-                <Input id="section" value={section} onChange={(e) => setSection(e.target.value)} placeholder="Enter section" />
+                <Input id="section" value={section} onChange={e => setSection(e.target.value)} placeholder="Enter section" />
               </div>
 
-              {loading && (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">Generating face embeddings...</p>
-                  <Progress value={registrationProgress} />
+              {/* Capture Progress */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Face Embeddings</span>
+                  <span className="font-medium">{captureCount}/{REQUIRED_EMBEDDINGS}</span>
+                </div>
+                <Progress value={(captureCount / REQUIRED_EMBEDDINGS) * 100} />
+                <div className="flex gap-2">
+                  {Array.from({ length: REQUIRED_EMBEDDINGS }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`flex-1 h-2 rounded-full ${
+                        i < captureCount ? 'bg-green-500' : 'bg-muted'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {allCaptured && (
+                <div className="flex items-center gap-2 text-green-600 text-sm">
+                  <CheckCircle2 className="h-4 w-4" />
+                  All face samples captured!
                 </div>
               )}
 
               <Button
                 onClick={handleRegister}
-                disabled={loading || capturedImages.length < REQUIRED_IMAGES}
+                disabled={loading || !allCaptured}
                 className="w-full"
                 size="lg"
               >
-                {loading ? "Registering..." : "Register User"}
+                {loading ? 'Registering...' : 'Register User'}
               </Button>
             </CardContent>
           </Card>
 
+          {/* Face Scanner */}
           <Card>
             <CardHeader>
-              <CardTitle>Face Capture ({capturedImages.length}/{REQUIRED_IMAGES})</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Face Capture ({captureCount}/{REQUIRED_EMBEDDINGS})</span>
+                {allCaptured && (
+                  <Button variant="outline" size="sm" onClick={resetCaptures}>
+                    Retake
+                  </Button>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Capture {REQUIRED_IMAGES} photos from slightly different angles for better recognition accuracy.
+                Face detection runs automatically. Look at the camera and hold still —
+                3 samples will be captured when your face is clearly detected and centered.
               </p>
-              <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
-                {isCapturing ? (
-                  <Webcam
-                    ref={webcamRef}
-                    audio={false}
-                    screenshotFormat="image/jpeg"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
+
+              {!scanning && !allCaptured ? (
+                <div className="space-y-4">
+                  <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
                     <p className="text-muted-foreground">Camera is off</p>
                   </div>
-                )}
-              </div>
-
-              <div className="flex gap-4">
-                <Button
-                  onClick={() => setIsCapturing(!isCapturing)}
-                  variant={isCapturing ? "destructive" : "default"}
-                  className="flex-1"
-                >
-                  {isCapturing ? (
-                    <>
-                      <StopCircle className="mr-2 h-4 w-4" />
-                      Stop Camera
-                    </>
-                  ) : (
-                    "Start Camera"
-                  )}
-                </Button>
-                <Button
-                  onClick={captureImage}
-                  disabled={!isCapturing || capturedImages.length >= REQUIRED_IMAGES}
-                  className="flex-1"
-                >
-                  <Camera className="mr-2 h-4 w-4" />
-                  Capture ({capturedImages.length}/{REQUIRED_IMAGES})
-                </Button>
-              </div>
-
-              {capturedImages.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {capturedImages.map((img, idx) => (
-                    <img
-                      key={idx}
-                      src={img}
-                      alt={`Capture ${idx + 1}`}
-                      className="w-full aspect-square object-cover rounded border"
-                    />
-                  ))}
+                  <Button onClick={() => setScanning(true)} className="w-full">
+                    Start Face Capture
+                  </Button>
                 </div>
+              ) : (
+                <FaceScanner
+                  onEmbeddingCaptured={handleEmbeddingCaptured}
+                  autoCapture={!allCaptured}
+                  enabled={scanning && !allCaptured}
+                  captureDelay={2000}
+                />
               )}
             </CardContent>
           </Card>
@@ -210,6 +215,4 @@ const Register = () => {
       </div>
     </div>
   );
-};
-
-export default Register;
+}
