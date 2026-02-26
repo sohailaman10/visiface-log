@@ -50,11 +50,27 @@ const MarkAttendance = () => {
         description: `Attendance marked for ${data.name}`,
       });
     } catch (error: any) {
-      const errorMessage = error.message || "Face not recognized";
+      // Parse edge function error responses
+      let errorMessage = "Face not recognized";
+      let variant: "destructive" | "default" = "destructive";
+      try {
+        if (error?.context?.body) {
+          const body = typeof error.context.body === 'string' ? JSON.parse(error.context.body) : error.context.body;
+          errorMessage = body?.error || errorMessage;
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+      } catch { /* use default */ }
+
+      // Handle duplicate attendance (409)
+      if (errorMessage.includes('already marked')) {
+        variant = "default";
+      }
+
       toast({
-        title: "Recognition Failed",
+        title: variant === "destructive" ? "Recognition Failed" : "⚠️ Already Marked",
         description: errorMessage,
-        variant: "destructive",
+        variant,
       });
     } finally {
       setLoading(false);
