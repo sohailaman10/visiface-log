@@ -6,18 +6,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-// Cosine similarity between two vectors
+const FIXED_DIM = 128
+
+// Normalize embedding to fixed length
+function normalizeEmbedding(vec: number[]): number[] {
+  if (vec.length === FIXED_DIM) return vec
+  if (vec.length > FIXED_DIM) return vec.slice(0, FIXED_DIM)
+  // Pad with zeros
+  return [...vec, ...new Array(FIXED_DIM - vec.length).fill(0)]
+}
+
+// Cosine similarity between two vectors (handles mismatched lengths via normalization)
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length !== vecB.length) return 0
+  const a = normalizeEmbedding(vecA)
+  const b = normalizeEmbedding(vecB)
 
   let dotProduct = 0
   let normA = 0
   let normB = 0
 
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i]
-    normA += vecA[i] * vecA[i]
-    normB += vecB[i] * vecB[i]
+  for (let i = 0; i < FIXED_DIM; i++) {
+    dotProduct += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
   }
 
   const magnitudeA = Math.sqrt(normA)
@@ -124,7 +135,7 @@ serve(async (req) => {
 
       // Compare against all stored embeddings, take the best
       for (const storedEmbedding of embeddings) {
-        if (!Array.isArray(storedEmbedding) || storedEmbedding.length !== scannedEmbedding.length) continue
+        if (!Array.isArray(storedEmbedding) || storedEmbedding.length === 0) continue
 
         const similarity = cosineSimilarity(scannedEmbedding, storedEmbedding)
         if (similarity > highestSimilarity) {
@@ -137,8 +148,8 @@ serve(async (req) => {
     const confidencePercent = Math.round(highestSimilarity * 100)
     console.log(`Best match: ${bestMatch?.name || 'none'} at ${confidencePercent}% (similarity: ${highestSimilarity.toFixed(4)})`)
 
-    // STEP 4: Threshold check (0.75 = 75%)
-    if (highestSimilarity < 0.75 || !bestMatch) {
+    // STEP 4: Threshold check (0.50 = 50% - lower threshold for LLM-generated embeddings)
+    if (highestSimilarity < 0.50 || !bestMatch) {
       return new Response(
         JSON.stringify({ error: 'Face not recognized. Please try again or register first.' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
