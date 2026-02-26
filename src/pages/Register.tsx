@@ -8,6 +8,9 @@ import { Camera, StopCircle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Progress } from "@/components/ui/progress";
+
+const REQUIRED_IMAGES = 3;
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -17,18 +20,19 @@ const Register = () => {
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [registrationProgress, setRegistrationProgress] = useState(0);
   const webcamRef = useRef<Webcam>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   const captureImage = useCallback(() => {
-    if (webcamRef.current && capturedImages.length < 20) {
+    if (webcamRef.current && capturedImages.length < REQUIRED_IMAGES) {
       const imageSrc = webcamRef.current.getScreenshot();
       if (imageSrc) {
         setCapturedImages((prev) => [...prev, imageSrc]);
         toast({
           title: "Image Captured",
-          description: `Captured ${capturedImages.length + 1}/20 images`,
+          description: `Captured ${capturedImages.length + 1}/${REQUIRED_IMAGES} images`,
         });
       }
     }
@@ -36,25 +40,22 @@ const Register = () => {
 
   const handleRegister = async () => {
     if (!name || !rollNumber || !studentClass || !section) {
-      toast({
-        title: "Error",
-        description: "Please fill all fields",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please fill all fields", variant: "destructive" });
       return;
     }
 
-    if (capturedImages.length < 20) {
-      toast({
-        title: "Error",
-        description: "Please capture 20 images for registration",
-        variant: "destructive",
-      });
+    if (capturedImages.length < REQUIRED_IMAGES) {
+      toast({ title: "Error", description: `Please capture ${REQUIRED_IMAGES} images for registration`, variant: "destructive" });
       return;
     }
 
     setLoading(true);
+    setRegistrationProgress(10);
+
     try {
+      setRegistrationProgress(30);
+      toast({ title: "Processing", description: "Generating face embeddings... This may take a moment." });
+
       const { data, error } = await supabase.functions.invoke('register-user', {
         body: {
           name,
@@ -67,9 +68,10 @@ const Register = () => {
 
       if (error) throw error;
 
+      setRegistrationProgress(100);
       toast({
         title: "✅ Registered Successfully",
-        description: "Your face has been registered in the system",
+        description: `${data.embeddingsCount} face embeddings generated and stored.`,
       });
 
       setTimeout(() => navigate("/"), 2000);
@@ -81,6 +83,7 @@ const Register = () => {
       });
     } finally {
       setLoading(false);
+      setRegistrationProgress(0);
     }
   };
 
@@ -108,43 +111,31 @@ const Register = () => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter full name"
-                />
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter full name" />
               </div>
               <div>
                 <Label htmlFor="rollNumber">Roll Number</Label>
-                <Input
-                  id="rollNumber"
-                  value={rollNumber}
-                  onChange={(e) => setRollNumber(e.target.value)}
-                  placeholder="Enter roll number"
-                />
+                <Input id="rollNumber" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} placeholder="Enter roll number" />
               </div>
               <div>
                 <Label htmlFor="class">Class</Label>
-                <Input
-                  id="class"
-                  value={studentClass}
-                  onChange={(e) => setStudentClass(e.target.value)}
-                  placeholder="Enter class"
-                />
+                <Input id="class" value={studentClass} onChange={(e) => setStudentClass(e.target.value)} placeholder="Enter class" />
               </div>
               <div>
                 <Label htmlFor="section">Section</Label>
-                <Input
-                  id="section"
-                  value={section}
-                  onChange={(e) => setSection(e.target.value)}
-                  placeholder="Enter section"
-                />
+                <Input id="section" value={section} onChange={(e) => setSection(e.target.value)} placeholder="Enter section" />
               </div>
+
+              {loading && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Generating face embeddings...</p>
+                  <Progress value={registrationProgress} />
+                </div>
+              )}
+
               <Button
                 onClick={handleRegister}
-                disabled={loading || capturedImages.length < 20}
+                disabled={loading || capturedImages.length < REQUIRED_IMAGES}
                 className="w-full"
                 size="lg"
               >
@@ -155,9 +146,12 @@ const Register = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Face Capture ({capturedImages.length}/20)</CardTitle>
+              <CardTitle>Face Capture ({capturedImages.length}/{REQUIRED_IMAGES})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Capture {REQUIRED_IMAGES} photos from slightly different angles for better recognition accuracy.
+              </p>
               <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
                 {isCapturing ? (
                   <Webcam
@@ -190,16 +184,16 @@ const Register = () => {
                 </Button>
                 <Button
                   onClick={captureImage}
-                  disabled={!isCapturing || capturedImages.length >= 20}
+                  disabled={!isCapturing || capturedImages.length >= REQUIRED_IMAGES}
                   className="flex-1"
                 >
                   <Camera className="mr-2 h-4 w-4" />
-                  Capture ({capturedImages.length}/20)
+                  Capture ({capturedImages.length}/{REQUIRED_IMAGES})
                 </Button>
               </div>
 
               {capturedImages.length > 0 && (
-                <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto">
+                <div className="grid grid-cols-3 gap-2">
                   {capturedImages.map((img, idx) => (
                     <img
                       key={idx}

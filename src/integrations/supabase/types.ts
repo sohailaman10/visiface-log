@@ -83,6 +83,7 @@ export type Database = {
         Row: {
           class: string
           created_at: string | null
+          embeddings: Json | null
           id: string
           name: string
           reference_images: Json
@@ -92,6 +93,7 @@ export type Database = {
         Insert: {
           class: string
           created_at?: string | null
+          embeddings?: Json | null
           id?: string
           name: string
           reference_images: Json
@@ -101,6 +103,7 @@ export type Database = {
         Update: {
           class?: string
           created_at?: string | null
+          embeddings?: Json | null
           id?: string
           name?: string
           reference_images?: Json
